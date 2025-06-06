@@ -12,7 +12,15 @@ Click one of these app links, then "Add to homescreen" from your browser
 
 ## Developing
 
+### Frontend
 ```bash
+cd frontend
 pnpm install
 pnpm dev
+```
+
+### Backend
+```bash
+pdm install
+cd backend
 ```

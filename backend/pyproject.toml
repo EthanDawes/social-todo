@@ -1,0 +1,12 @@
+[project]
+name = "social-todo"
+version = "0.1.0"
+authors = [{ name = "Ethan Dawes", email = "ethand.python@gmail.com" }]
+dependencies = ["openai>=1.84.0"]
+requires-python = "==3.13.*"
+readme = "../README.md"
+license = { text = "MIT" }
+
+
+[tool.pdm]
+distribution = false
