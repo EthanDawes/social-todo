@@ -21,6 +21,10 @@ pnpm dev
 
 ### Backend
 ```bash
-pdm install
 cd backend
+pdm install
 ```
+
+Download your tasks from Google Takout and put `Tasks.json` into `backend`
+
+Reference: [OpenAI pricing](https://platform.openai.com/docs/pricing)
