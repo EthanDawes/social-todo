@@ -1,29 +1,14 @@
-from typing import Mapping, TypedDict, Optional, Any, Sequence, Literal, Iterable
+from typing import Mapping, Optional, Any, Sequence, Iterable
 from itertools import islice
 import json
 from datetime import datetime
-from openai import OpenAI, NotGiven
+from openai import OpenAI
 import os
 import io
 from dotenv import load_dotenv
 
 from openai.types import *
-
-
-class TaskItem(TypedDict):
-    notes: Optional[str]
-    due: Optional[str]
-    kind: str
-    created: str
-    id: str
-    extra_notification_device_id: Optional[str]
-    title: str
-    task_type: str
-    updated: str
-    selfLink: str
-    status: str
-    completed: Optional[str]
-    parent: Optional[str]
+from types import *
 
 
 class ExtendedTaskItem(TaskItem):
@@ -33,42 +18,7 @@ class ExtendedTaskItem(TaskItem):
     overview: str
 
 
-class TaskGroup(TypedDict):
-    kind: str
-    id: str
-    title: str
-    updated: str
-    items: list[TaskItem]
-    selfLink: str
-
-
-class TaskList(TypedDict):
-    kind: str
-    items: list[TaskGroup]
-
-
-class RequestMessage(TypedDict):
-    role: Literal["system", "user", "assistant"]
-    content: str
-
-
-class RequestBody(TypedDict):
-    model: str
-    messages: list[RequestMessage]
-
-
-class RequestInput(TypedDict):
-    custom_id: str
-    method: Literal["POST", "GET", "PUT", "DELETE"]
-    url: str
-    body: RequestBody
-
-
-class BatchMetadata(TypedDict):
-    platform: str
-    model: str
-    prompt: str
-
+# Using lists instead of dicts (which would merge easier) b/c I need to use the list methods
 def merge_lists[T: Mapping](base: list[T], new: list[T], on="id"):
     combined: dict[Any, T] = {}
     for item in base + new:
@@ -189,7 +139,6 @@ class AIFacade:
                 return status, None
             case "completed":
                 file_response = self.client.files.content(self._batch_metadata.output_file_id)
-                return status, file_response.text #TODO: delete
         os.remove(self.BATCH_PATH)  # This technically leads to invalid state
         return status, response
 
@@ -216,7 +165,7 @@ class ResponseStyle:
         ]
 
 
-def parse_results(resp_text: str):
+def save_results(resp_text: str):
     resp_text = resp_text.strip()
     responses = [resp for resp in (json.loads(line) for line in resp_text.split("\n")) if resp["error"] is None]
 
@@ -226,18 +175,16 @@ def parse_results(resp_text: str):
     task_manager.mark_save(ids)
     metadata = ai_bridge.metadata
 
-    try:
-        with open("posts.json", "r", encoding="utf-8") as file:
-            posts: dict[str, dict] = json.load(file)
-    except (FileNotFoundError, json.decoder.JSONDecodeError):
-        posts = {}
+    with open("posts.json", "r", encoding="utf-8") as file:
+        posts: dict[str, dict] = json.load(file) if len(file.read()) else {}
 
     for new_post, id in zip(new_posts, ids):
         task = task_manager.find_task(id)
         posts[id] = {
             **metadata,
             "overview": task["overview"],
-            "post": new_post
+            "post": new_post,
+            "id": id,
         }
 
     with open("posts.json", "w", encoding="utf-8") as file:
@@ -273,7 +220,7 @@ Make a 4chan post"""),
         status, results = ai_bridge.fetch_batch()
         print(status)
         if results:
-            parse_results(results)
+            save_results(results)
     else:
         gen_number = int(input("How many posts would you like to generate? (default 0) ") or "0")
         if gen_number > 0:
@@ -288,8 +235,3 @@ Make a 4chan post"""),
                     "prompt": style_agent.TEMPLATE,
                 }
             )
-
-"""
-The thing I tried different about this project was thinking really carefully about design patterns.
-My takeaway is that like optimization, premature refactoring is really frustrating.
-"""

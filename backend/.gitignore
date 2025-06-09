@@ -9,3 +9,5 @@ __pypackages__/
 Tasks.json
 .env
 batch.json
+posts.json
+tasks_flat.json
