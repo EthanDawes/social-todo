@@ -1,8 +1,8 @@
-from typing import Mapping, TypedDict, Optional, Any, Sequence, Literal
+from typing import Mapping, TypedDict, Optional, Any, Sequence, Literal, Iterable
 from itertools import islice
 import json
 from datetime import datetime
-from openai import OpenAI
+from openai import OpenAI, NotGiven
 import os
 import io
 from dotenv import load_dotenv
@@ -64,6 +64,11 @@ class RequestInput(TypedDict):
     body: RequestBody
 
 
+class BatchMetadata(TypedDict):
+    platform: str
+    model: str
+    prompt: str
+
 def merge_lists[T: Mapping](base: list[T], new: list[T], on="id"):
     combined: dict[Any, T] = {}
     for item in base + new:
@@ -115,8 +120,12 @@ class TaskManager:
     def _filter_used(tasks: Sequence[ExtendedTaskItem]):
         return filter(lambda x: x["status"] == "needsAction" and x["processedDate"] is None, tasks)
 
-    def mark_save(self, tasks: list[ExtendedTaskItem]):
-        for task in tasks:
+    def find_task(self, id: str) -> ExtendedTaskItem:
+        return next(filter(lambda task: task["id"] == id, self._flat_tasks))
+
+    def mark_save(self, tasks_ids: Iterable[str]):
+        for task_id in tasks_ids:
+            task = self.find_task(task_id)
             task["processedDate"] = datetime.now().isoformat()
         with open("tasks_flat.json", "w", encoding="utf-8") as file:
             json.dump(self._flat_tasks, file)
@@ -145,13 +154,14 @@ class AIFacade:
         )
         return batch_input_file.id
 
-    def submit_batch(self, prompts: list[RequestInput]):
+    def submit_batch(self, prompts: list[RequestInput], *, metadata: Optional[BatchMetadata] = None):
         assert not self.batch_ongoing(), "Batch already submitted"
         file_id = self._upload_batch(prompts)
         self._batch_metadata = self.client.batches.create(
             input_file_id=file_id,
             endpoint="/v1/chat/completions",
-            completion_window="24h"
+            completion_window="24h",
+            metadata=metadata,
         )
         print("Submitted!")
 
@@ -173,17 +183,23 @@ class AIFacade:
         assert self.batch_ongoing(), "No batch submitted"
         self._batch_metadata = self.client.batches.retrieve(self._batch_metadata.id)
         status = self._batch_metadata.status
+        response: Optional[str] = None
         match status:
             case "validating" | "in_progress" | "finalizing":
                 return status, None
             case "completed":
                 file_response = self.client.files.content(self._batch_metadata.output_file_id)
-                return status, file_response.text
-        os.remove(self.BATCH_PATH)
-        return status, None
+                return status, file_response.text #TODO: delete
+        os.remove(self.BATCH_PATH)  # This technically leads to invalid state
+        return status, response
+
+    @property
+    def metadata(self) -> Optional[BatchMetadata]:
+        assert self.batch_ongoing(), "No batch submitted"
+        return self._batch_metadata.metadata
 
 
-class Adapter:
+class ResponseStyle:
     def __init__(self, template: str, model="gpt-4.1-mini-2025-04-14"):
         self.MODEL = model
         self.TEMPLATE = template
@@ -199,16 +215,40 @@ class Adapter:
             for task in tasks
         ]
 
-    @staticmethod
-    def save_results(posts):
-        pass
+
+def parse_results(resp_text: str):
+    resp_text = resp_text.strip()
+    responses = [resp for resp in (json.loads(line) for line in resp_text.split("\n")) if resp["error"] is None]
+
+    ids = [resp["custom_id"] for resp in responses]
+    new_posts = [resp["response"]["body"]["choices"][0]["message"]["content"] for resp in responses]
+
+    task_manager.mark_save(ids)
+    metadata = ai_bridge.metadata
+
+    try:
+        with open("posts.json", "r", encoding="utf-8") as file:
+            posts: dict[str, dict] = json.load(file)
+    except (FileNotFoundError, json.decoder.JSONDecodeError):
+        posts = {}
+
+    for new_post, id in zip(new_posts, ids):
+        task = task_manager.find_task(id)
+        posts[id] = {
+            **metadata,
+            "overview": task["overview"],
+            "post": new_post
+        }
+
+    with open("posts.json", "w", encoding="utf-8") as file:
+        json.dump(posts, file)
 
 
 if __name__ == "__main__":
     load_dotenv()
 
     styles = {
-        "tumblr": Adapter("""Here is my TODO list:
+        "tumblr": ResponseStyle(""""Here is my TODO list:
 <list>
 Focus on <element>
 1. Thoughts before doing the task and what the problem is
@@ -217,11 +257,11 @@ Focus on <element>
 4. Thoughts after finishing the task
 5. Thoughts before writing a Reddit post
 6. The reddit post. Optimize for encouragement and entertainment/interesting"""),
-        "twitter": Adapter("""Here is my TODO list:
+        "twitter": ResponseStyle(""""Here is my TODO list:
 <list>
 Focus on <element>
 Make a Twitter post"""),
-        "4chan": Adapter("""Here is my TODO list:
+        "4chan": ResponseStyle(""""Here is my TODO list:
 <list>
 Focus on <element>
 Make a 4chan post"""),
@@ -232,10 +272,24 @@ Make a 4chan post"""),
     if ai_bridge.batch_ongoing():
         status, results = ai_bridge.fetch_batch()
         print(status)
-        Adapter.save_results(results)
+        if results:
+            parse_results(results)
     else:
         gen_number = int(input("How many posts would you like to generate? (default 0) ") or "0")
         if gen_number > 0:
             style = input(f"What style would you like to use? (options are {', '.join(styles.keys())}) ")
             assert style in styles, "Style not supported"
-            ai_bridge.submit_batch(styles[style].create_batch(task_manager.next(gen_number), task_manager.all_tasks))
+            style_agent = styles[style]
+            ai_bridge.submit_batch(
+                style_agent.create_batch(task_manager.next(gen_number), task_manager.all_tasks),
+                metadata={
+                    "platform": style,
+                    "model": style_agent.MODEL,
+                    "prompt": style_agent.TEMPLATE,
+                }
+            )
+
+"""
+The thing I tried different about this project was thinking really carefully about design patterns.
+My takeaway is that like optimization, premature refactoring is really frustrating.
+"""

@@ -36,3 +36,4 @@ pnpm dev
 
 **Reference:**
 - [OpenAI pricing](https://platform.openai.com/docs/pricing)
+- [Batch API](https://platform.openai.com/docs/guides/batch?lang=python)
