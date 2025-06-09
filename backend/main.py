@@ -5,6 +5,7 @@ from datetime import datetime
 from openai import OpenAI
 import os
 import io
+from dotenv import load_dotenv
 
 from openai.types import *
 
@@ -95,7 +96,7 @@ class TaskManager:
     def _flatten_tasks(tasks: TaskList) -> list[ExtendedTaskItem]:
         return [
             {**item, "groupName": group["title"], "processedDate": None,
-             "overview": f"{item["groupName"]}: {item["title"]} {item["notes"].strip()}"}
+             "overview": f"{group["title"]}: {item["title"]} {(item.get('notes', '')).strip()}"}
             for group in tasks["items"]
             for item in group["items"]
         ]
@@ -128,17 +129,18 @@ class TaskManager:
 class AIFacade:
     def __init__(self) -> None:
         self.client = OpenAI()
-        self.BATCH_PATH = "batch_id"
+        self.BATCH_PATH = "batch.json"
 
         try:
             with open(self.BATCH_PATH, "r") as file:
-                self.__batch_metadata: Optional[FileObject] = json.load(file)
+                self.__batch_metadata: Optional[Batch] = Batch.model_validate_json(file.read())
         except FileNotFoundError:
             self.__batch_metadata = None
 
     def _upload_batch(self, prompts: list[RequestInput]):
+        print("Uploading batch...")
         batch_input_file = self.client.files.create(
-            file=io.BytesIO(b"\n".join(json.dumps(prompt) for prompt in prompts)),
+            file=io.BytesIO(b"\n".join(bytes(json.dumps(prompt), "utf-8") for prompt in prompts)),
             purpose="batch",
         )
         return batch_input_file.id
@@ -151,6 +153,7 @@ class AIFacade:
             endpoint="/v1/chat/completions",
             completion_window="24h"
         )
+        print("Submitted!")
 
     @property
     def _batch_metadata(self):
@@ -160,7 +163,7 @@ class AIFacade:
     def _batch_metadata(self, val: Batch):
         self.__batch_metadata = val
         with open(self.BATCH_PATH, "w") as file:
-            json.dump(val, file)
+            file.write(val.to_json())
 
     def batch_ongoing(self):
         # Impossible to annotate as type guard
@@ -169,14 +172,15 @@ class AIFacade:
     def fetch_batch(self):
         assert self.batch_ongoing(), "No batch submitted"
         self._batch_metadata = self.client.batches.retrieve(self._batch_metadata.id)
-        match self._batch_metadata.status:
+        status = self._batch_metadata.status
+        match status:
             case "validating" | "in_progress" | "finalizing":
-                return None
+                return status, None
             case "completed":
                 file_response = self.client.files.content(self._batch_metadata.output_file_id)
-                return file_response.text
+                return status, file_response.text
         os.remove(self.BATCH_PATH)
-        return None
+        return status, None
 
 
 class Adapter:
@@ -201,6 +205,8 @@ class Adapter:
 
 
 if __name__ == "__main__":
+    load_dotenv()
+
     styles = {
         "tumblr": Adapter("""Here is my TODO list:
 <list>
@@ -224,10 +230,12 @@ Make a 4chan post"""),
     task_manager = TaskManager()
     ai_bridge = AIFacade()
     if ai_bridge.batch_ongoing():
-        Adapter.save_results(ai_bridge.fetch_batch())
+        status, results = ai_bridge.fetch_batch()
+        print(status)
+        Adapter.save_results(results)
     else:
         gen_number = int(input("How many posts would you like to generate? (default 0) ") or "0")
         if gen_number > 0:
-            style = input(f"What style would you like to use? (options are {','.join(styles.keys())}) ")
+            style = input(f"What style would you like to use? (options are {', '.join(styles.keys())}) ")
             assert style in styles, "Style not supported"
             ai_bridge.submit_batch(styles[style].create_batch(task_manager.next(gen_number), task_manager.all_tasks))

@@ -20,11 +20,19 @@ pnpm dev
 ```
 
 ### Backend
-```bash
-cd backend
-pdm install
-```
+**Prerequisites:**
+- Python 3.13
+- PDM
 
-Download your tasks from Google Takout and put `Tasks.json` into `backend`
+**Setup:**
+1.
+    ```bash
+    cd backend
+    cp .sample.env .env
+    pdm install
+    ```
+2. Download your tasks from Google Takout and put `Tasks.json` into `backend`
+3. Paste your OpenAI API key into `.env`
 
-Reference: [OpenAI pricing](https://platform.openai.com/docs/pricing)
+**Reference:**
+- [OpenAI pricing](https://platform.openai.com/docs/pricing)
