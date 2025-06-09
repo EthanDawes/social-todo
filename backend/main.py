@@ -1,9 +1,12 @@
-from typing import Mapping, TypedDict, Optional, Any, Sequence
+from typing import Mapping, TypedDict, Optional, Any, Sequence, Literal
 from itertools import islice
 import json
 from datetime import datetime
 from openai import OpenAI
 import os
+import io
+
+from openai.types import *
 
 
 class TaskItem(TypedDict):
@@ -26,6 +29,7 @@ class ExtendedTaskItem(TaskItem):
     """Added after processing"""
     groupName: str
     processedDate: Optional[str]
+    overview: str
 
 
 class TaskGroup(TypedDict):
@@ -42,6 +46,23 @@ class TaskList(TypedDict):
     items: list[TaskGroup]
 
 
+class RequestMessage(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class RequestBody(TypedDict):
+    model: str
+    messages: list[RequestMessage]
+
+
+class RequestInput(TypedDict):
+    custom_id: str
+    method: Literal["POST", "GET", "PUT", "DELETE"]
+    url: str
+    body: RequestBody
+
+
 def merge_lists[T: Mapping](base: list[T], new: list[T], on="id"):
     combined: dict[Any, T] = {}
     for item in base + new:
@@ -53,6 +74,11 @@ class TaskManager:
     def __init__(self):
         self._flat_tasks: list[ExtendedTaskItem] = []
         self.load_file()
+
+    def load_file(self):
+        tasks, flat_tasks = self._load_tasks()
+        new_flat_tasks = self._sort_tasks(self._flatten_tasks(tasks))
+        self._flat_tasks = merge_lists(new_flat_tasks, flat_tasks)
 
     @staticmethod
     def _load_tasks():
@@ -68,7 +94,8 @@ class TaskManager:
     @staticmethod
     def _flatten_tasks(tasks: TaskList) -> list[ExtendedTaskItem]:
         return [
-            {**item, "groupName": group["title"], "processedDate": None}
+            {**item, "groupName": group["title"], "processedDate": None,
+             "overview": f"{item["groupName"]}: {item["title"]} {item["notes"].strip()}"}
             for group in tasks["items"]
             for item in group["items"]
         ]
@@ -80,50 +107,47 @@ class TaskManager:
             key=lambda x: x.get("due") or x["created"]
         )
 
+    def next(self, n: int):
+        return list(islice(self._filter_used(self._flat_tasks), n))
+
     @staticmethod
     def _filter_used(tasks: Sequence[ExtendedTaskItem]):
         return filter(lambda x: x["status"] == "needsAction" and x["processedDate"] is None, tasks)
 
-    def load_file(self):
-        tasks, flat_tasks = self._load_tasks()
-        new_flat_tasks = self._sort_tasks(self._flatten_tasks(tasks))
-        self._flat_tasks = merge_lists(new_flat_tasks, flat_tasks)
-
-    def _save(self):
+    def mark_save(self, tasks: list[ExtendedTaskItem]):
+        for task in tasks:
+            task["processedDate"] = datetime.now().isoformat()
         with open("tasks_flat.json", "w", encoding="utf-8") as file:
             json.dump(self._flat_tasks, file)
 
-    def next(self, n: int):
-        filtered = list(islice(self._filter_used(self._flat_tasks), n))
-        for task in filtered:
-            task["processedDate"] = datetime.now().isoformat()
-        self._save()
-        return filtered
+    @property
+    def all_tasks(self):
+        return "\n".join(task["overview"] for task in self._flat_tasks)
 
 
-class AIBridge:
+class AIFacade:
     def __init__(self) -> None:
         self.client = OpenAI()
         self.BATCH_PATH = "batch_id"
 
         try:
             with open(self.BATCH_PATH, "r") as file:
-                self.__batch_metadata = json.load(file)
+                self.__batch_metadata: Optional[FileObject] = json.load(file)
         except FileNotFoundError:
             self.__batch_metadata = None
 
-    def _upload_batch(self):
+    def _upload_batch(self, prompts: list[RequestInput]):
         batch_input_file = self.client.files.create(
-            file=open("batchinput.jsonl", "rb"),
-            purpose="batch"
+            file=io.BytesIO(b"\n".join(json.dumps(prompt) for prompt in prompts)),
+            purpose="batch",
         )
-        return batch_input_file
+        return batch_input_file.id
 
-    def submit_batch(self, tasks: Sequence[TaskItem]):
+    def submit_batch(self, prompts: list[RequestInput]):
         assert not self.batch_ongoing(), "Batch already submitted"
-        self._batch_metadata = self._upload_batch()
-        self.client.batches.create(
-            input_file_id=self._batch_metadata.id,
+        file_id = self._upload_batch(prompts)
+        self._batch_metadata = self.client.batches.create(
+            input_file_id=file_id,
             endpoint="/v1/chat/completions",
             completion_window="24h"
         )
@@ -133,12 +157,13 @@ class AIBridge:
         return self.__batch_metadata
 
     @_batch_metadata.setter
-    def _batch_metadata(self, val: dict):
+    def _batch_metadata(self, val: Batch):
         self.__batch_metadata = val
         with open(self.BATCH_PATH, "w") as file:
             json.dump(val, file)
 
     def batch_ongoing(self):
+        # Impossible to annotate as type guard
         return self._batch_metadata is not None
 
     def fetch_batch(self):
@@ -154,21 +179,55 @@ class AIBridge:
         return None
 
 
-class Converter:
-    @staticmethod
-    def create_batch(tasks: Sequence[TaskItem]):
-        pass
+class Adapter:
+    def __init__(self, template: str, model="gpt-4.1-mini-2025-04-14"):
+        self.MODEL = model
+        self.TEMPLATE = template
+
+    def create_batch(self, tasks: Sequence[TaskItem], all_tasks: str) -> list[RequestInput]:
+        return [
+            {"custom_id": task["id"], "method": "POST", "url": "/v1/chat/completions",
+             "body": {"model": self.MODEL,
+                      "messages": [{"role": "system",
+                                    "content": str(self.TEMPLATE).replace("<list>", all_tasks).replace("<element>",
+                                                                                                       task[
+                                                                                                           "overview"])}]}}
+            for task in tasks
+        ]
 
     @staticmethod
     def save_results(posts):
         pass
 
+
 if __name__ == "__main__":
+    styles = {
+        "tumblr": Adapter("""Here is my TODO list:
+<list>
+Focus on <element>
+1. Thoughts before doing the task and what the problem is
+2. Thoughts when starting the task
+3. Thoughts while doing the task
+4. Thoughts after finishing the task
+5. Thoughts before writing a Reddit post
+6. The reddit post. Optimize for encouragement and entertainment/interesting"""),
+        "twitter": Adapter("""Here is my TODO list:
+<list>
+Focus on <element>
+Make a Twitter post"""),
+        "4chan": Adapter("""Here is my TODO list:
+<list>
+Focus on <element>
+Make a 4chan post"""),
+    }
+
     task_manager = TaskManager()
-    ai_bridge = AIBridge()
-    if ai_bridge.batch_ongoing:
-        Converter.save_results(ai_bridge.fetch_batch())
+    ai_bridge = AIFacade()
+    if ai_bridge.batch_ongoing():
+        Adapter.save_results(ai_bridge.fetch_batch())
     else:
         gen_number = int(input("How many posts would you like to generate? (default 0) ") or "0")
         if gen_number > 0:
-            ai_bridge.submit_batch(Converter.create_batch(task_manager.next(gen_number)))
+            style = input(f"What style would you like to use? (options are {','.join(styles.keys())}) ")
+            assert style in styles, "Style not supported"
+            ai_bridge.submit_batch(styles[style].create_batch(task_manager.next(gen_number), task_manager.all_tasks))
