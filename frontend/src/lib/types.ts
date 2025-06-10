@@ -13,3 +13,7 @@ export type PostsData = Record<string, Post>;
 export interface FeedProps {
   posts: PostsData;
 }
+
+export interface PostProps {
+  post: Post;
+}
