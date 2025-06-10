@@ -1,4 +1,5 @@
-from typing import Mapping, Optional, Any, Sequence, Iterable
+from random import shuffle
+from typing import Mapping, Any, Sequence, Iterable
 from itertools import islice
 import json
 from datetime import datetime
@@ -8,7 +9,7 @@ import io
 from dotenv import load_dotenv
 
 from openai.types import *
-from types import *
+from task_types import *
 
 
 class ExtendedTaskItem(TaskItem):
@@ -63,7 +64,7 @@ class TaskManager:
             key=lambda x: x.get("due") or x["created"]
         )
 
-    def next(self, n: int):
+    def next(self, n: int) -> list[ExtendedTaskItem]:
         return list(islice(self._filter_used(self._flat_tasks), n))
 
     @staticmethod
@@ -82,7 +83,7 @@ class TaskManager:
 
     @property
     def all_tasks(self):
-        return "\n".join(task["overview"] for task in self._flat_tasks)
+        return [task["overview"] for task in self._flat_tasks]
 
 
 class AIFacade:
@@ -139,7 +140,8 @@ class AIFacade:
                 return status, None
             case "completed":
                 file_response = self.client.files.content(self._batch_metadata.output_file_id)
-        os.remove(self.BATCH_PATH)  # This technically leads to invalid state
+        print("must manually remove", self.BATCH_PATH, "to make new batch")
+        # os.remove(self.BATCH_PATH)  # This technically leads to invalid state
         return status, response
 
     @property
@@ -149,16 +151,21 @@ class AIFacade:
 
 
 class ResponseStyle:
-    def __init__(self, template: str, model="gpt-4.1-mini-2025-04-14"):
+    def __init__(self, template: str, model="gpt-4o-2024-08-06"):
         self.MODEL = model
         self.TEMPLATE = template
 
-    def create_batch(self, tasks: Sequence[TaskItem], all_tasks: str) -> list[RequestInput]:
+    def create_batch(self, tasks: Sequence[TaskItem], all_tasks: list[str]) -> list[RequestInput]:
+        # TODO: including my entire task list is ~20k tokens. This is expensive and exceeds 90k limit. Solutions:
+        # First 100 is ~1,400 tokens (much more reasonable)
+        # Instruct to make all the output posts in one prompt (to reduce duplication) but could this have memory issues? + Parsing complexity
+        shuffle(all_tasks)
+        all_tasks = all_tasks[:100]
         return [
             {"custom_id": task["id"], "method": "POST", "url": "/v1/chat/completions",
              "body": {"model": self.MODEL,
                       "messages": [{"role": "system",
-                                    "content": str(self.TEMPLATE).replace("<list>", all_tasks).replace("<element>",
+                                    "content": str(self.TEMPLATE).replace("<list>", "\n".join(all_tasks)).replace("<element>",
                                                                                                        task[
                                                                                                            "overview"])}]}}
             for task in tasks
@@ -195,20 +202,21 @@ if __name__ == "__main__":
     load_dotenv()
 
     styles = {
-        "tumblr": ResponseStyle(""""Here is my TODO list:
+        "tumblr": ResponseStyle("""Here is my TODO list:
 <list>
 Focus on <element>
 1. Thoughts before doing the task and what the problem is
 2. Thoughts when starting the task
 3. Thoughts while doing the task
 4. Thoughts after finishing the task
-5. Thoughts before writing a Reddit post
-6. The reddit post. Optimize for encouragement and entertainment/interesting"""),
-        "twitter": ResponseStyle(""""Here is my TODO list:
+5. Thoughts about sharing with other people
+Utilize ADHD humor, queer humor, furry humor, programming humor, or a mix.
+Do not add introductory or concluding sentences as the AI agent"""),
+        "twitter": ResponseStyle("""Here is my TODO list:
 <list>
 Focus on <element>
 Make a Twitter post"""),
-        "4chan": ResponseStyle(""""Here is my TODO list:
+        "4chan": ResponseStyle("""Here is my TODO list:
 <list>
 Focus on <element>
 Make a 4chan post"""),
@@ -227,8 +235,13 @@ Make a 4chan post"""),
             style = input(f"What style would you like to use? (options are {', '.join(styles.keys())}) ")
             assert style in styles, "Style not supported"
             style_agent = styles[style]
+            batch_tasks = task_manager.next(gen_number)
+            print("Going to generate posts for:\n" + "\n".join(task["overview"] for task in batch_tasks))
+            print("\nWith prompt\n" + style_agent.TEMPLATE)
+            if (input("Is this ok? (default y) ") or "y")[0] != "y":
+                exit(1)
             ai_bridge.submit_batch(
-                style_agent.create_batch(task_manager.next(gen_number), task_manager.all_tasks),
+                style_agent.create_batch(batch_tasks, task_manager.all_tasks),
                 metadata={
                     "platform": style,
                     "model": style_agent.MODEL,

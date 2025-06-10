@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from typing import List
 from openai import OpenAI
-from types import *
+from task_types import *
 
 
 class Config:

@@ -1,5 +1,6 @@
 from typing import TypedDict, Optional, Literal
 
+
 class TaskItem(TypedDict):
     notes: Optional[str]
     due: Optional[str]
