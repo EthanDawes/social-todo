@@ -1,12 +1,8 @@
 <script lang="ts">
     import { marked } from "marked";
-    import type { TumblrPostsData } from "$lib/types/tumblr.ts";
+    import type { FeedProps } from "$lib/types.ts";
 
-    interface Props {
-        posts: TumblrPostsData;
-    }
-
-    const { posts }: Props = $props();
+    const { posts }: FeedProps = $props();
 
     // Convert posts object to array and sort by most recent (using id as proxy)
     const postsArray = $derived(
