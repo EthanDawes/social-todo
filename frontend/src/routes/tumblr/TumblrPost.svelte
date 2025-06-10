@@ -1,8 +1,11 @@
 <script lang="ts">
     import type { PostProps } from "$lib/types";
+    import { makeIntersectionObserver } from "$lib/posts";
     import { marked } from "marked";
+    import { onMount } from "svelte";
 
     let { post }: PostProps = $props();
+    let postElement: HTMLElement;
 
     function renderMarkdown(content: string): string {
         return marked(content, {
@@ -23,9 +26,12 @@
             ? overview.substring(0, maxLength) + "..."
             : overview;
     }
+
+    onMount(() => makeIntersectionObserver(postElement, post));
 </script>
 
 <article
+    bind:this={postElement}
     class="tumblr-post bg-[#faf7d8] rounded-xl mb-4 overflow-hidden hover:shadow-md transition-shadow"
 >
     <!-- Avatar and Username -->

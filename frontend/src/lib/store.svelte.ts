@@ -2,6 +2,8 @@ import type { PostsData } from "./types";
 import { page } from "$app/state";
 import { base } from "$app/paths";
 
+const platform = $derived(page.url.pathname.substring(1));
+
 class Posts {
   allPosts: PostsData = $state(
     localStorage.getItem("posts")
@@ -9,10 +11,9 @@ class Posts {
       : {},
   );
 
-  private readonly platform = $derived(page.url.pathname.substring(1));
   readonly platformPosts = $derived(
     Object.values(this.allPosts).filter(
-      (post) => post.platform === this.platform,
+      (post) => post.platform === platform && !post.viewed,
     ),
   );
 
@@ -28,6 +29,11 @@ class Posts {
 
   savePosts() {
     localStorage.setItem("posts", JSON.stringify(this.allPosts));
+  }
+
+  markRead(id: string) {
+    this.allPosts[id].viewed = new Date().toISOString();
+    this.savePosts();
   }
 }
 

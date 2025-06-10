@@ -5,6 +5,7 @@ export interface Post {
   prompt: string;
   overview: string;
   post: string;
+  viewed?: string;
 }
 
 // Map id to Post
