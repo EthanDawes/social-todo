@@ -124,11 +124,11 @@
     </div>
 
     <!-- Main Content -->
-    <div class="tumblr-feed ml-80 max-w-xl mx-auto bg-white min-h-screen">
+    <div class="tumblr-feed ml-80 max-w-xl mx-auto min-h-screen">
         <!-- Posts -->
         {#each postsArray as post (post.id)}
             <article
-                class="tumblr-post bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-hidden hover:shadow-md transition-shadow"
+                class="tumblr-post bg-[#faf7d8] rounded-xl mb-4 overflow-hidden hover:shadow-md transition-shadow"
             >
                 <!-- Avatar and Username -->
                 <div class="flex items-start p-4 pb-0">
