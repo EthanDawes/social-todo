@@ -1,7 +1,10 @@
-import { json } from "@sveltejs/kit";
+import { readFile } from "fs/promises";
 
 export async function GET() {
   // Load posts.json and serve
-  const posts = await import("@/../../../backend/posts.json");
-  return json(posts);
+  const data = await readFile("../backend/posts.json");
+
+  return new Response(data, {
+    headers: { "Content-Type": "application/json" },
+  });
 }

@@ -10,10 +10,6 @@ export interface Post {
 // Map id to Post
 export type PostsData = Record<string, Post>;
 
-export interface FeedProps {
-  posts: PostsData;
-}
-
 export interface PostProps {
   post: Post;
 }

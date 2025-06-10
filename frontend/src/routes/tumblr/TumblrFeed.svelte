@@ -1,13 +1,8 @@
 <script lang="ts">
-    import type { FeedProps } from "$lib/types.ts";
+    import { postsManager } from "$lib/store.svelte";
     import TumblrPost from "./TumblrPost.svelte";
 
-    const { posts }: FeedProps = $props();
-
-    // Convert posts object to array and sort by most recent (using id as proxy)
-    const postsArray = $derived(
-        Object.values(posts).sort((a, b) => b.id.localeCompare(a.id)),
-    );
+    let posts = $derived(postsManager.platformPosts);
 </script>
 
 <div class="tumblr-container bg-tumblr-blue min-h-screen">
@@ -102,11 +97,11 @@
     <!-- Main Content -->
     <div class="tumblr-feed md:ml-80 ml-0 max-w-xl mx-auto min-h-screen">
         <!-- Posts -->
-        {#each postsArray as post (post.id)}
+        {#each posts as post (post.id)}
             <TumblrPost {post} />
         {/each}
 
-        {#if postsArray.length === 0}
+        {#if posts.length === 0}
             <div class="text-center py-12 px-4">
                 <div class="text-gray-400 mb-4">
                     <svg
