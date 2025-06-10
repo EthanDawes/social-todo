@@ -37,7 +37,7 @@
 <div class="tumblr-container bg-tumblr-blue min-h-screen">
     <!-- Sidebar -->
     <div
-        class="tumblr-sidebar fixed left-0 top-0 w-80 h-full bg-tumblr-blue p-6 overflow-y-auto"
+        class="tumblr-sidebar fixed left-0 top-0 w-80 h-full bg-tumblr-blue p-6 overflow-y-auto md:block hidden"
     >
         <!-- Tumblr Logo -->
         <div class="mb-8">
@@ -124,7 +124,7 @@
     </div>
 
     <!-- Main Content -->
-    <div class="tumblr-feed ml-80 max-w-xl mx-auto min-h-screen">
+    <div class="tumblr-feed md:ml-80 ml-0 max-w-xl mx-auto min-h-screen">
         <!-- Posts -->
         {#each postsArray as post (post.id)}
             <article
@@ -364,5 +364,31 @@
 
     .tumblr-content :global(.prose em) {
         font-style: italic;
+    }
+
+    /* Mobile responsive styles */
+    @media (max-width: 1023px) {
+        .tumblr-sidebar {
+            display: none;
+        }
+
+        .tumblr-feed {
+            margin-left: 0;
+            padding: 0.5rem;
+        }
+
+        .tumblr-post {
+            margin-bottom: 1rem;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .tumblr-feed {
+            padding: 0.25rem;
+        }
+
+        .tumblr-post {
+            border-radius: 0.5rem;
+        }
     }
 </style>
