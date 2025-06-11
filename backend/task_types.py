@@ -1,34 +1,25 @@
-from typing import TypedDict, Optional, Literal
+from typing import TypedDict, Optional, Literal, Any
 
 
 class TaskItem(TypedDict):
-    notes: Optional[str]
-    due: Optional[str]
     kind: str
-    created: str
     id: str
-    extra_notification_device_id: Optional[str]
+    etag: str
     title: str
-    task_type: str
     updated: str
     selfLink: str
+    position: str
+    notes: Optional[str]
     status: str
+    due: Optional[str]
     completed: Optional[str]
+    links: list[Any]
+    webViewLink: str
     parent: Optional[str]
 
 
-class TaskGroup(TypedDict):
-    kind: str
-    id: str
-    title: str
-    updated: str
-    items: list[TaskItem]
-    selfLink: str
-
-
-class TaskList(TypedDict):
-    kind: str
-    items: list[TaskGroup]
+# Map category name to tasks
+TaskList = dict[str, list[TaskItem]]
 
 
 class RequestMessage(TypedDict):

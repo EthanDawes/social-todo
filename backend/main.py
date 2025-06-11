@@ -1,3 +1,4 @@
+print("Loading...")
 from random import shuffle
 from typing import Mapping, Any, Sequence, Iterable
 from itertools import islice
@@ -8,6 +9,7 @@ import io
 from dotenv import load_dotenv
 
 from openai.types import *
+from prototype.backend.dl_gtasks import dl_gtasks
 from task_types import *
 
 
@@ -42,7 +44,7 @@ class TaskManager:
 
     @staticmethod
     def _load_tasks():
-        with open("Tasks.json", "r", encoding="utf-8") as file:
+        with open("google_tasks_backup.json", "r", encoding="utf-8") as file:
             tasks: TaskList = json.load(file)
         try:
             with open("tasks_flat.json", "r", encoding="utf-8") as file:
@@ -54,17 +56,17 @@ class TaskManager:
     @staticmethod
     def _flatten_tasks(tasks: TaskList) -> list[ExtendedTaskItem]:
         return [
-            {**item, "groupName": group["title"], "processedDate": None,
-             "overview": f"{group["title"]}: {item["title"]} {(item.get('notes', '')).strip()}"}
-            for group in tasks["items"]
-            for item in group["items"]
+            {**item, "groupName": groupName, "processedDate": None,
+             "overview": f"{groupName}: {item["title"]} {item.get('notes', '').strip()}"}
+            for groupName, items in tasks.items()
+            for item in items
         ]
 
     @staticmethod
     def _sort_tasks[T: TaskItem](tasks: list[T]):
         return sorted(
             tasks,
-            key=lambda x: x.get("due") or x["created"]
+            key=lambda x: x.get("due") or x["updated"]
         )
 
     def next(self, n: int) -> list[ExtendedTaskItem]:
@@ -79,7 +81,7 @@ class TaskManager:
 
     def save(self):
         with open("tasks_flat.json", "w", encoding="utf-8") as file:
-            json.dump(self._flat_tasks, file)
+            json.dump(self._flat_tasks, file, indent=2)
 
     def mark_save(self, tasks_ids: Iterable[str]):
         for task_id in tasks_ids:
@@ -227,6 +229,9 @@ Make a Twitter post"""),
 Focus on <element>
 Make a 4chan post"""),
     }
+
+    if (input("Would you like to redownload your Google Tasks (default n) ") or "n")[0] == "y":
+        dl_gtasks()
 
     task_manager = TaskManager()
     ai_bridge = AIFacade()

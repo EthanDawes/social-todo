@@ -10,6 +10,7 @@ import os
 SCOPES = ['https://www.googleapis.com/auth/tasks.readonly']
 
 def authenticate():
+    print("authenticating...")
     creds = None
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
@@ -25,6 +26,7 @@ def authenticate():
     return creds
 
 def download_all_tasks(service):
+    print("downloading...")
     tasklists = service.tasklists().list(maxResults=100).execute().get('items', [])
     all_tasks = {}
     for lst in tasklists:
@@ -37,7 +39,7 @@ def download_all_tasks(service):
         all_tasks[lst['title']] = tasks
     return all_tasks
 
-def main():
+def dl_gtasks():
     creds = authenticate()
     service = build('tasks', 'v1', credentials=creds)
     all_tasks = download_all_tasks(service)
@@ -46,4 +48,4 @@ def main():
     print("All tasks downloaded and saved to google_tasks_backup.json")
 
 if __name__ == '__main__':
-    main()
+    dl_gtasks()

@@ -31,8 +31,13 @@ pnpm dev
     cp .sample.env .env
     pdm install
     ```
-2. Download your tasks from Google Takout and put `Tasks.json` into `backend`
-3. Paste your OpenAI API key into `.env`
+2. Paste your OpenAI API key into `.env`
+3. Create a [Google Cloud Project](https://console.cloud.google.com/auth/clients/)
+   1. Create desktop OAuth client
+   2. Download `client_secret_*.json` to `backend`. Rename to `credentials.json`
+   3. Add the Google tasks library
+   4. Add the read permission
+   5. Add yourself as a test user
 
 **Reference:**
 - [OpenAI pricing](https://platform.openai.com/docs/pricing)

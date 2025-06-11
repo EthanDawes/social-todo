@@ -11,3 +11,7 @@ Tasks.json
 batch.json
 posts.json
 tasks_flat.json
+client_secret_*.json
+credentials.json
+token.json
+google_tasks_backup.json
