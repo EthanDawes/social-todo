@@ -147,7 +147,7 @@ class AIFacade:
             case "validating" | "in_progress" | "finalizing":
                 return status, None
             case "completed":
-                file_response = self.client.files.content(self._batch_metadata.output_file_id)
+                response = self.client.files.content(self._batch_metadata.output_file_id).text
         print("must manually remove", self.BATCH_PATH, "to make new batch")
         # os.remove(self.BATCH_PATH)  # This technically leads to invalid state
         return status, response
@@ -191,7 +191,8 @@ def save_results(resp_text: str):
     metadata = ai_bridge.metadata
 
     with open("posts.json", "r", encoding="utf-8") as file:
-        posts: dict[str, dict] = json.load(file) if len(file.read()) else {}
+        contents = file.read()  # Can only read once
+        posts: dict[str, dict] = json.loads(contents) if len(contents) else {}
 
     for new_post, id in zip(new_posts, ids):
         task = task_manager.find_task(id)
@@ -203,7 +204,7 @@ def save_results(resp_text: str):
         }
 
     with open("posts.json", "w", encoding="utf-8") as file:
-        json.dump(posts, file)
+        json.dump(posts, file, indent=2)
 
 
 if __name__ == "__main__":
