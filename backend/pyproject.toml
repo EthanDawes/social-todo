@@ -2,7 +2,7 @@
 name = "social-todo"
 version = "0.1.0"
 authors = [{ name = "Ethan Dawes", email = "ethand.python@gmail.com" }]
-dependencies = ["openai>=1.84.0", "python-dotenv>=1.1.0"]
+dependencies = ["openai>=1.84.0", "python-dotenv>=1.1.0", "google-auth>=2.40.3", "google-auth-oauthlib>=1.2.2", "google-auth-httplib2>=0.2.0", "google-api-python-client>=2.172.0"]
 requires-python = "==3.13.*"
 readme = "../README.md"
 license = { text = "MIT" }
