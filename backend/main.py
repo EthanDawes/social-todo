@@ -4,7 +4,6 @@ from itertools import islice
 import json
 from datetime import datetime
 from openai import OpenAI
-import os
 import io
 from dotenv import load_dotenv
 
@@ -23,7 +22,10 @@ class ExtendedTaskItem(TaskItem):
 def merge_lists[T: Mapping](base: list[T], new: list[T], on="id"):
     combined: dict[Any, T] = {}
     for item in base + new:
-        combined[item[on]] = item
+        if item[on] in combined:
+            combined[item[on]] = {**item, **combined[item[on]]}
+        else:
+            combined[item[on]] = item
     return list(combined.values())
 
 
@@ -36,6 +38,7 @@ class TaskManager:
         tasks, flat_tasks = self._load_tasks()
         new_flat_tasks = self._sort_tasks(self._flatten_tasks(tasks))
         self._flat_tasks = merge_lists(new_flat_tasks, flat_tasks)
+        self.save()
 
     @staticmethod
     def _load_tasks():
@@ -74,12 +77,15 @@ class TaskManager:
     def find_task(self, id: str) -> ExtendedTaskItem:
         return next(filter(lambda task: task["id"] == id, self._flat_tasks))
 
+    def save(self):
+        with open("tasks_flat.json", "w", encoding="utf-8") as file:
+            json.dump(self._flat_tasks, file)
+
     def mark_save(self, tasks_ids: Iterable[str]):
         for task_id in tasks_ids:
             task = self.find_task(task_id)
             task["processedDate"] = datetime.now().isoformat()
-        with open("tasks_flat.json", "w", encoding="utf-8") as file:
-            json.dump(self._flat_tasks, file)
+        self.save()
 
     @property
     def all_tasks(self):
