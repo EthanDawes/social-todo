@@ -159,7 +159,7 @@ class AIFacade:
 
 
 class ResponseStyle:
-    def __init__(self, template: str, model="gpt-4o-2024-08-06"):
+    def __init__(self, template: str, model="gpt-4.1-2025-04-14"):
         self.MODEL = model
         self.TEMPLATE = template
 
@@ -219,8 +219,9 @@ Focus on <element>
 3. Thoughts while doing the task
 4. Thoughts after finishing the task
 5. Thoughts about sharing with other people
-Utilize ADHD humor, queer humor, furry humor, programming humor, or a mix.
-Do not add introductory or concluding sentences as the AI agent"""),
+Utilize queer humor, furry humor, programming humor, or a mix.
+Do not add introductory or concluding sentences as the AI agent.
+Format each section as a markdown header."""),
         "twitter": ResponseStyle("""Here is my TODO list:
 <list>
 Focus on <element>
@@ -231,9 +232,6 @@ Focus on <element>
 Make a 4chan post"""),
     }
 
-    if (input("Would you like to redownload your Google Tasks (default n) ") or "n")[0] == "y":
-        dl_gtasks()
-
     task_manager = TaskManager()
     ai_bridge = AIFacade()
     if ai_bridge.batch_ongoing():
@@ -242,6 +240,8 @@ Make a 4chan post"""),
         if results:
             save_results(results)
     else:
+        if (input("Would you like to redownload your Google Tasks (default n) ") or "n")[0] == "y":
+            dl_gtasks()
         gen_number = int(input("How many posts would you like to generate? (default 0) ") or "0")
         if gen_number > 0:
             style = input(f"What style would you like to use? (options are {', '.join(styles.keys())}) ")
